@@ -85,19 +85,19 @@ static char assert_msg[1024];
 
 #define TEST_SUITE(name) static int test_suite_##name = 0
 
-#define TEST(name) \
-    static int test_##name(void); \
-    __attribute__((constructor)) static void register_##name(void) { \
+#define TEST(test_name) \
+    static int test_##test_name(void); \
+    __attribute__((constructor)) static void register_##test_name(void) { \
         if (test_count < MAX_TESTS) { \
-            tests[test_count].name = #name; \
-            tests[test_count].func = test_##name; \
+            tests[test_count].name = #test_name; \
+            tests[test_count].func = test_##test_name; \
             tests[test_count].failed = 0; \
             tests[test_count].file = __FILE__; \
             tests[test_count].line = __LINE__; \
             test_count++; \
         } \
     } \
-    static int test_##name(void)
+    static int test_##test_name(void)
 
 #define ASSERT(cond, msg, ...) do { \
     if (!(cond)) { \
