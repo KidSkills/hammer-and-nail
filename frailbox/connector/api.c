@@ -376,7 +376,8 @@ connector_result_t connector_get_stats(connector_stats_t *stats)
     memcpy(stats->last_error_message, g_ctx.last_error_msg, ERROR_MESSAGE_BUF_SIZE);
 
     if (g_ctx.started_at_ms > 0) {
-        stats->uptime_seconds = (internal_now_ms() - g_ctx.started_at_ms) / 1000;
+        uint64_t elapsed_ms = internal_now_ms() - g_ctx.started_at_ms;
+        stats->uptime_seconds = elapsed_ms == 0 ? 1 : (elapsed_ms + 999) / 1000;
     }
 
     return CONNECTOR_SUCCESS;
