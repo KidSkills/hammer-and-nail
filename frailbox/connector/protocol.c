@@ -277,7 +277,7 @@ const char *protocol_type_name(uint8_t type)
         case PROTOCOL_TYPE_AUTH_CHALLENGE:return "AUTH_CHALLENGE";
         case PROTOCOL_TYPE_AUTH_TOKEN:    return "AUTH_TOKEN";
         default:
-            if (type >= PROTOCOL_TYPE_CUSTOM_BASE && type <= PROTOCOL_TYPE_MAX) {
+            if (type >= PROTOCOL_TYPE_CUSTOM_BASE && type < PROTOCOL_TYPE_MAX) {
                 return "CUSTOM";
             }
             return "UNKNOWN";
