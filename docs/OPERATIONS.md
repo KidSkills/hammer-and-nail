@@ -15,6 +15,24 @@
 
 ## Monitoring
 
+### Frailbox Self-Test
+
+Run the frailbox self-test before opening a PR that touches the C runtime:
+
+```sh
+cd frailbox
+make self-test
+```
+
+The target builds and runs the connector test binary plus smoke checks for
+connector allocation/send, logger initialization, and sandbox initialization.
+It prints a concise `passed`, `failed`, and `skipped` summary and exits with a
+non-zero status if any required check fails.
+
+`python3 build.py --module frailbox` also runs `make self-test` after the
+frailbox binary builds, so the generated build diagnostic includes the self-test
+result for reviewers.
+
 ### Health Check Endpoints
 
 Each service exposes a health check endpoint:
