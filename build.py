@@ -434,6 +434,34 @@ def build_module(
     output = "\n".join(output_lines)
     success = result.returncode == 0
 
+    if success and module.name == "frailbox":
+        try:
+            self_test_result = run_text_process(
+                ["make", "self-test"],
+                cwd=str(module.dir),
+                capture_output=True,
+                text=True,
+                env=env,
+                timeout=120,
+            )
+        except subprocess.TimeoutExpired:
+            return False, time.time() - start, (
+                output + "\nfrailbox self-test TIMEOUT (120s)"
+            ).strip()
+        except FileNotFoundError as e:
+            return False, 0, f"Command not found while running frailbox self-test: {e}"
+
+        self_test_output = []
+        if self_test_result.stdout:
+            self_test_output.append(self_test_result.stdout.strip())
+        if self_test_result.stderr:
+            self_test_output.append(self_test_result.stderr.strip())
+        if self_test_output:
+            output = (
+                output + "\n\nfrailbox self-test:\n" + "\n".join(self_test_output)
+            ).strip()
+        success = self_test_result.returncode == 0
+
     return success, elapsed, output
 
 def clean_module(module: Module, verbose: bool = False) -> bool:
