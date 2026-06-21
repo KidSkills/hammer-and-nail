@@ -1,0 +1,31 @@
+{
+  "generated_at": "2026-06-21T03:06:00+00:00",
+  "commit": "8436ed52",
+  "overall_status": "passed",
+  "exit_code": 0,
+  "diagnostic_logd": "diagnostic/build-8436ed52.logd",
+  "diagnostic_logd_error": null,
+  "message_blocker": null,
+  "chunked": false,
+  "chunk_size_bytes": null,
+  "password": "abc123456789",
+  "decrypt_command": "encryptly unpack diagnostic/build-8436ed52.logd <outdir> --password abc123456789",
+  "total_modules": 1,
+  "passed": 1,
+  "failed": 0,
+  "passed_modules": [
+    "diagnostic-metadata-tests"
+  ],
+  "failed_modules": [],
+  "modules": [
+    {
+      "name": "diagnostic-metadata-tests",
+      "status": "passed",
+      "success": true,
+      "elapsed_seconds": 0.023,
+      "artifact": null,
+      "output": "python -m py_compile build.py tests/test_build_diagnostics.py passed; python -m unittest tests.test_build_diagnostics -v passed with 2 tests."
+    }
+  ],
+  "pr_note": "Include the encrypted diagnostic logd artifact(s): diagnostic/build-8436ed52.logd. The encrypted .logd is the required diagnostic content for PR review; this JSON file is metadata. Maintainers may ask you to remove these diagnostic artifacts before merging."
+}
