@@ -1,24 +1,24 @@
-{
-  "generated_at": "2026-06-20T12:27:36+0000",
-  "commit": "1d4aab2",
-  "diagnostic_logd": "diagnostic/build-1d4aab2.logd",
-  "diagnostic_logd_error": null,
-  "message_blocker": null,
-  "chunked": false,
-  "chunk_size_bytes": null,
-  "password": "abc123456789",
-  "decrypt_command": "encryptly unpack diagnostic/build-1d4aab2.logd <outdir> --password abc123456789",
-  "total_modules": 1,
-  "passed": 1,
-  "failed": 0,
-  "modules": [
-    {
-      "name": "frailbox",
-      "status": "PASS",
-      "elapsed_seconds": 0,
-      "artifact": "frailbox/frailbox",
-      "output": "make self-test passed in WSL: allocator/logger/sandbox/connector smoke checks passed; connector tests 33 passed, 0 failed"
-    }
-  ],
-  "pr_note": "Include the encrypted diagnostic logd artifact(s): diagnostic/build-1d4aab2.logd. The encrypted .logd is the required diagnostic content for PR review; this JSON file is metadata. Maintainers may ask you to remove these diagnostic artifacts before merging."
+﻿{
+    "generated_at":  "2026-06-21T02:20:22+0000",
+    "commit":  "1d4aab2",
+    "diagnostic_logd":  "diagnostic/build-1d4aab2.logd",
+    "diagnostic_logd_error":  null,
+    "message_blocker":  null,
+    "chunked":  false,
+    "chunk_size_bytes":  null,
+    "password":  "abc123456789",
+    "decrypt_command":  "encryptly unpack diagnostic/build-1d4aab2.logd \u003coutdir\u003e --password abc123456789",
+    "total_modules":  1,
+    "passed":  1,
+    "failed":  0,
+    "modules":  [
+                    {
+                        "name":  "frailbox",
+                        "status":  "PASS",
+                        "elapsed_seconds":  0,
+                        "artifact":  "frailbox/frailbox",
+                        "output":  "make self-test passed in WSL: allocator/logger/sandbox/connector smoke checks passed; connector tests 33 passed, 0 failed"
+                    }
+                ],
+    "pr_note":  "Includes encrypted diagnostic archive diagnostic/build-1d4aab2.logd for PR validation; JSON metadata refreshed after archive upload."
 }
