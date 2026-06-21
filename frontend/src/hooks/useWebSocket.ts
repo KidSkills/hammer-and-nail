@@ -124,6 +124,47 @@ export function useWebSocket(options: WSOptions) {
     setState(prev => ({ ...prev, ...partial }));
   }, []);
 
+  const clearReconnectTimer = useCallback(() => {
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+  }, []);
+
+  const clearPongTimeout = useCallback(() => {
+    if (pongTimerRef.current) {
+      clearTimeout(pongTimerRef.current);
+      pongTimerRef.current = null;
+    }
+  }, []);
+
+  const stopPing = useCallback(() => {
+    if (pingTimerRef.current) {
+      clearInterval(pingTimerRef.current);
+      pingTimerRef.current = null;
+    }
+    clearPongTimeout();
+  }, [clearPongTimeout]);
+
+  const detachSocketHandlers = useCallback((ws: WebSocket | null) => {
+    if (!ws) return;
+    ws.onopen = null;
+    ws.onmessage = null;
+    ws.onclose = null;
+    ws.onerror = null;
+  }, []);
+
+  const closeSocket = useCallback((reason: string) => {
+    const ws = wsRef.current;
+    if (!ws) return;
+
+    detachSocketHandlers(ws);
+    if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+      ws.close(1000, reason);
+    }
+    wsRef.current = null;
+  }, [detachSocketHandlers]);
+
   const sendMessage = useCallback((message: WSMessage) => {
     const ws = wsRef.current;
     const msgStr = JSON.stringify(message);
@@ -173,10 +214,14 @@ export function useWebSocket(options: WSOptions) {
   }, [sendMessage, updateState]);
 
   const connect = useCallback(() => {
+    if (!mountedRef.current) {
+      return;
+    }
     if (wsRef.current?.readyState === WebSocket.OPEN || wsRef.current?.readyState === WebSocket.CONNECTING) {
       return;
     }
 
+    clearReconnectTimer();
     updateState({ connectionState: 'connecting', reconnectAttempt: reconnectAttemptRef.current });
 
     try {
@@ -277,21 +322,47 @@ export function useWebSocket(options: WSOptions) {
   }, [mergedOptions, sendMessage, updateState, state.totalMessagesReceived]);
 
   const disconnect = useCallback(() => {
-    if (reconnectTimerRef.current) {
-      clearTimeout(reconnectTimerRef.current);
-      reconnectTimerRef.current = null;
-    }
-    if (wsRef.current) {
-      wsRef.current.close(1000, 'Client disconnect');
-      wsRef.current = null;
-    }
+    clearReconnectTimer();
+    closeSocket('Client disconnect');
     stopPing();
+    reconnectAttemptRef.current = 0;
     updateState({ connectionState: 'disconnected', reconnectAttempt: 0 });
-  }, [updateState]);
+  }, [clearReconnectTimer, closeSocket, stopPing, updateState]);
+
+  const cleanupConnection = useCallback((reason: string) => {
+    const hadReconnectTimer = Boolean(reconnectTimerRef.current);
+    const hadPingTimer = Boolean(pingTimerRef.current);
+    const hadPongTimer = Boolean(pongTimerRef.current);
+    const hadSocket = Boolean(wsRef.current);
+
+    clearReconnectTimer();
+    closeSocket(reason);
+    stopPing();
+    reconnectAttemptRef.current = 0;
+
+    if (mergedOptions.debug && (hadReconnectTimer || hadPingTimer || hadPongTimer || hadSocket)) {
+      console.debug('[WS] Cleaned up connection resources', {
+        reason,
+        hadReconnectTimer,
+        hadPingTimer,
+        hadPongTimer,
+        hadSocket,
+      });
+    }
+  }, [clearReconnectTimer, closeSocket, mergedOptions.debug, stopPing]);
 
   const scheduleReconnect = useCallback(() => {
+    if (!mountedRef.current) {
+      return;
+    }
     if (!mergedOptions.reconnect || reconnectAttemptRef.current >= mergedOptions.maxReconnectAttempts) {
       updateState({ connectionState: 'error' });
+      return;
+    }
+    if (reconnectTimerRef.current) {
+      if (mergedOptions.debug) {
+        console.debug('[WS] Reconnect already scheduled; skipping duplicate timer');
+      }
       return;
     }
 
@@ -330,22 +401,7 @@ export function useWebSocket(options: WSOptions) {
         }, mergedOptions.pongTimeout);
       }
     }, mergedOptions.pingInterval);
-  }, [mergedOptions, updateState]);
-
-  const stopPing = useCallback(() => {
-    if (pingTimerRef.current) {
-      clearInterval(pingTimerRef.current);
-      pingTimerRef.current = null;
-    }
-    clearPongTimeout();
-  }, []);
-
-  const clearPongTimeout = useCallback(() => {
-    if (pongTimerRef.current) {
-      clearTimeout(pongTimerRef.current);
-      pongTimerRef.current = null;
-    }
-  }, []);
+  }, [mergedOptions, stopPing, updateState]);
 
   const send = useCallback((type: string, payload: unknown, channel?: string) => {
     const id = `msg_${++messageIdRef.current}`;
@@ -366,7 +422,7 @@ export function useWebSocket(options: WSOptions) {
     }
     return () => {
       mountedRef.current = false;
-      disconnect();
+      cleanupConnection('Component unmount');
     };
   }, []);
 
