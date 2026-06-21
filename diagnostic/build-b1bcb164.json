@@ -1,0 +1,24 @@
+{
+  "generated_at": "2026-06-21T04:15:00+00:00",
+  "commit": "b1bcb164",
+  "diagnostic_logd": "diagnostic/build-b1bcb164.logd",
+  "diagnostic_logd_error": null,
+  "message_blocker": null,
+  "chunked": false,
+  "chunk_size_bytes": null,
+  "password": "abc123456789",
+  "decrypt_command": "encryptly unpack diagnostic/build-b1bcb164.logd <outdir> --password abc123456789",
+  "total_modules": 1,
+  "passed": 1,
+  "failed": 0,
+  "modules": [
+    {
+      "name": "frontend-websocket-lifecycle",
+      "status": "PASS",
+      "elapsed_seconds": 0,
+      "artifact": "frontend/dist",
+      "output": "npm --prefix frontend install passed; npm --prefix frontend run build passed; lifecycle harness documented in frontend/src/hooks/useWebSocket.lifecycle.md."
+    }
+  ],
+  "pr_note": "Include the encrypted diagnostic logd artifact(s): diagnostic/build-b1bcb164.logd. The encrypted .logd is the required diagnostic content for PR review; this JSON file is metadata. Maintainers may ask you to remove these diagnostic artifacts before merging."
+}
