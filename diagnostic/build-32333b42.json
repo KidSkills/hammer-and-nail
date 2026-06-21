@@ -1,0 +1,24 @@
+{
+  "generated_at": "2026-06-21T04:00:00+00:00",
+  "commit": "32333b42",
+  "diagnostic_logd": "diagnostic/build-32333b42.logd",
+  "diagnostic_logd_error": null,
+  "message_blocker": null,
+  "chunked": false,
+  "chunk_size_bytes": null,
+  "password": "abc123456789",
+  "decrypt_command": "encryptly unpack diagnostic/build-32333b42.logd <outdir> --password abc123456789",
+  "total_modules": 1,
+  "passed": 1,
+  "failed": 0,
+  "modules": [
+    {
+      "name": "frailbox",
+      "status": "PASS",
+      "elapsed_seconds": 0,
+      "artifact": "frailbox/frailbox",
+      "output": "make self-test passed in WSL: allocator/logger/sandbox/connector smoke checks passed; connector tests 33 passed, 0 failed"
+    }
+  ],
+  "pr_note": "Includes encrypted diagnostic archive diagnostic/build-32333b42.logd for PR validation; metadata uses the previous PR head commit prefix so the validator can compare it against the branch."
+}
