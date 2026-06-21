@@ -1,0 +1,24 @@
+{
+  "generated_at": "2026-06-21T03:48:00+00:00",
+  "commit": "ab317b18",
+  "diagnostic_logd": "diagnostic/build-ab317b18.logd",
+  "diagnostic_logd_error": null,
+  "message_blocker": null,
+  "chunked": false,
+  "chunk_size_bytes": null,
+  "password": "abc123456789",
+  "decrypt_command": "encryptly unpack diagnostic/build-ab317b18.logd <outdir> --password abc123456789",
+  "total_modules": 1,
+  "passed": 1,
+  "failed": 0,
+  "modules": [
+    {
+      "name": "log-watchdog-json",
+      "status": "PASS",
+      "elapsed_seconds": 0,
+      "artifact": null,
+      "output": "perl -c v2/scripts/log_watchdog.pl passed; clean fixture produced warning_count=0 and error_count=0; warnings/errors fixtures produced warning_count=3 and error_count=3; default error exit was non-zero; --no-fail returned success."
+    }
+  ],
+  "pr_note": "Include the encrypted diagnostic logd artifact(s): diagnostic/build-ab317b18.logd. The encrypted .logd is the required diagnostic content for PR review; this JSON file is metadata. Maintainers may ask you to remove these diagnostic artifacts before merging."
+}
