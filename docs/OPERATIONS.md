@@ -15,6 +15,16 @@
 
 ## Monitoring
 
+### Build Diagnostic Failure Metadata
+
+`python3 build.py` writes `diagnostic/build-<commit>.json` for every build
+attempt. Treat `overall_status`, `exit_code`, and `failed_modules` as the
+authoritative summary fields. A failed module is recorded with
+`status: "failed"` and `success: false` in the `modules` list, and the process
+exits non-zero whenever any module fails. If the encrypted `.logd` archive
+cannot be created, `diagnostic_logd_error` is populated and the report is also
+marked failed even when the modules themselves passed.
+
 ### Health Check Endpoints
 
 Each service exposes a health check endpoint:

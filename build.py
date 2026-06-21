@@ -116,6 +116,19 @@ class Module:
     build_dir: Optional[Path] = None
     env: Optional[dict[str, str]] = None
 
+
+@dataclass(frozen=True)
+class ModuleResult:
+    name: str
+    success: bool
+    elapsed: float
+    output: str
+    artifact: Optional[str] = None
+
+    @property
+    def status(self) -> str:
+        return "passed" if self.success else "failed"
+
 MODULES = [
     Module(
         name="backend",
@@ -522,7 +535,7 @@ def collect_system_info() -> str:
 
 
 def build_diagnostic_report(
-    results: list[tuple[str, bool, float, str, Optional[str]]],
+    results: list[ModuleResult],
     commit_id: str,
     logd_relpaths: Optional[list[str]] = None,
     password: Optional[str] = None,
@@ -542,9 +555,15 @@ def build_diagnostic_report(
     if logd_relpaths and len(logd_relpaths) > 1:
         decrypt_target = str((DIAGNOSTIC_DIR / f"build-{commit_id}.logd").relative_to(ROOT))
 
+    failed_modules = [result.name for result in results if not result.success]
+    passed_modules = [result.name for result in results if result.success]
+    exit_code = 1 if failed_modules or logd_error else 0
+
     report = {
         "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "commit": commit_id,
+        "overall_status": "failed" if exit_code else "passed",
+        "exit_code": exit_code,
         "diagnostic_logd": diagnostic_logd,
         "diagnostic_logd_error": logd_error,
         "message_blocker": message_blocker,
@@ -556,17 +575,20 @@ def build_diagnostic_report(
             if decrypt_target and password else None
         ),
         "total_modules": len(results),
-        "passed": sum(1 for _, s, _, _, _ in results if s),
-        "failed": sum(1 for _, s, _, _, _ in results if not s),
+        "passed": len(passed_modules),
+        "failed": len(failed_modules),
+        "passed_modules": passed_modules,
+        "failed_modules": failed_modules,
         "modules": [
             {
-                "name": name,
-                "status": "PASS" if success else "FAIL",
-                "elapsed_seconds": round(elapsed, 3),
-                "artifact": binary,
-                "output": output,
+                "name": result.name,
+                "status": result.status,
+                "success": result.success,
+                "elapsed_seconds": round(result.elapsed, 3),
+                "artifact": result.artifact,
+                "output": result.output,
             }
-            for name, success, elapsed, output, binary in results
+            for result in results
         ],
         "pr_note": (
             (f"Include the encrypted diagnostic logd artifact(s): {', '.join(logd_relpaths)}. " if logd_relpaths else "Encrypted diagnostic logd artifact was not created; include this JSON report showing why. ")
@@ -632,7 +654,7 @@ def commit_diagnostic_artifacts(paths: list[Path], commit_id: str) -> bool:
 
 
 def generate_logd(
-    results: list[tuple[str, bool, float, str, Optional[str]]],
+    results: list[ModuleResult],
     verbose: bool = False,
 ) -> bool:
     logd_path, metadata_path, commit_id = diagnostic_paths_for_commit()
@@ -679,30 +701,30 @@ def generate_logd(
             "=" * 50,
             f"generated_at: {datetime.datetime.now(datetime.timezone.utc).isoformat()}",
             f"total_modules: {len(results)}",
-            f"passed: {sum(1 for _, s, _, _, _ in results if s)}",
-            f"failed: {sum(1 for _, s, _, _, _ in results if not s)}",
+            f"passed: {sum(1 for result in results if result.success)}",
+            f"failed: {sum(1 for result in results if not result.success)}",
             "",
             "module results:",
         ]
-        for name, success, elapsed, _, binary in results:
+        for result in results:
             summary_lines.append(
-                f"  {name}: {'PASS' if success else 'FAIL'} ({elapsed:.2f}s)"
-                f"{f' [{binary}]' if binary else ''}"
+                f"  {result.name}: {result.status.upper()} ({result.elapsed:.2f}s)"
+                f"{f' [{result.artifact}]' if result.artifact else ''}"
             )
         (safe_dir / "build-summary.txt").write_text(
             "\n".join(summary_lines), encoding="utf-8"
         )
 
         log_lines = []
-        for name, success, elapsed, output, binary in results:
+        for result in results:
             log_lines.append(
-                f"\n{'=' * 50}\n{name} ({'PASS' if success else 'FAIL'}, {elapsed:.2f}s)\n"
+                f"\n{'=' * 50}\n{result.name} ({result.status.upper()}, {result.elapsed:.2f}s)\n"
                 f"{'=' * 50}"
             )
-            if binary:
-                log_lines.append(f"artifact: {binary}")
-            if output:
-                log_lines.append(output)
+            if result.artifact:
+                log_lines.append(f"artifact: {result.artifact}")
+            if result.output:
+                log_lines.append(result.output)
         (safe_dir / "build.log").write_text("\n".join(log_lines), encoding="utf-8")
 
         sr = run_text_process(
@@ -786,25 +808,26 @@ def generate_logd(
         shutil.rmtree(workspace, ignore_errors=True)
 
 
-def print_summary(results: list[tuple[str, bool, float, str, Optional[str]]]):
+def print_summary(results: list[ModuleResult]):
     print(f"  {color('Build Summary', Colors.BOLD)}")
 
     total = len(results)
-    passed = sum(1 for _, s, _, _, _ in results if s)
+    passed = sum(1 for result in results if result.success)
     failed = total - passed
-    total_time = sum(t for _, _, t, _, _ in results)
+    total_time = sum(result.elapsed for result in results)
+    failed_modules = [result.name for result in results if not result.success]
 
-    for name, success, elapsed, output, binary in results:
-        status_icon = color("✓", Colors.GREEN) if success else color("✗", Colors.RED)
-        status_text = color("PASS", Colors.GREEN) if success else color("FAIL", Colors.RED)
-        time_str = f"{elapsed:.1f}s" if elapsed < 60 else f"{elapsed / 60:.1f}m"
+    for result in results:
+        status_icon = color("✓", Colors.GREEN) if result.success else color("✗", Colors.RED)
+        status_text = color(result.status.upper(), Colors.GREEN if result.success else Colors.RED)
+        time_str = f"{result.elapsed:.1f}s" if result.elapsed < 60 else f"{result.elapsed / 60:.1f}m"
 
-        print(f"\n  {status_icon}  {color(name + ':', Colors.BOLD)} {status_text}  ({time_str})")
-        if binary:
-            print(f"       artifact: {color(binary, Colors.GRAY)}")
-        if not success and output:
+        print(f"\n  {status_icon}  {color(result.name + ':', Colors.BOLD)} {status_text}  ({time_str})")
+        if result.artifact:
+            print(f"       artifact: {color(result.artifact, Colors.GRAY)}")
+        if not result.success and result.output:
 
-            lines = output.strip().split("\n")
+            lines = result.output.strip().split("\n")
             print(f"       {color('last output:', Colors.RED)}")
             for line in lines[-5:]:
                 print(f"       {color(line, Colors.GRAY)}")
@@ -814,6 +837,8 @@ def print_summary(results: list[tuple[str, bool, float, str, Optional[str]]]):
           f"{color(str(passed) + ' passed', Colors.GREEN)}, "
           f"{color(str(failed) + ' failed', Colors.RED)}, "
           f"{total_time:.1f}s total")
+    if failed_modules:
+        print(f"  {color('Failed modules:', Colors.RED)} {', '.join(failed_modules)}")
 
 def main():
     parser = argparse.ArgumentParser(
@@ -923,25 +948,25 @@ Diagnostic bundle:
         blocker = f"{ENCRYPTLY_BLOCKER_MESSAGE} {encryptly_message}"
         print(f"  {color('✗ encryptly cannot run', Colors.RED)}")
         print(f"  {color('BLOCKER:', Colors.RED)} {blocker}")
-        results = [("encryptly-preflight", False, elapsed, blocker, None)]
+        results = [ModuleResult("encryptly-preflight", False, elapsed, blocker)]
         generate_logd(results, args.verbose)
         return 1
     print(f"  {color('✓ encryptly runs', Colors.GREEN)}")
 
     print(f"\n  {color(f'Building {len(selected)} module(s) | release={args.release}', Colors.GRAY)}")
 
-    results: list[tuple[str, bool, float, str, Optional[str]]] = []
+    results: list[ModuleResult] = []
 
     for module in selected:
         success, elapsed, output = build_module(module, args.release, args.verbose)
         binary = verify_binary(module) if success else None
-        results.append((module.name, success, elapsed, output, binary))
+        results.append(ModuleResult(module.name, success, elapsed, output, binary))
 
     print_summary(results)
 
     diagnostics_ok = generate_logd(results, args.verbose)
 
-    return 0 if diagnostics_ok and all(r[1] for r in results) else 1
+    return 0 if diagnostics_ok and all(result.success for result in results) else 1
 
 if __name__ == "__main__":
     sys.exit(main())
