@@ -1,0 +1,24 @@
+{
+  "generated_at": "2026-06-21T03:25:00+00:00",
+  "commit": "2e22ed32",
+  "diagnostic_logd": "diagnostic/build-2e22ed32.logd",
+  "diagnostic_logd_error": null,
+  "message_blocker": null,
+  "chunked": false,
+  "chunk_size_bytes": null,
+  "password": "abc123456789",
+  "decrypt_command": "encryptly unpack diagnostic/build-2e22ed32.logd <outdir> --password abc123456789",
+  "total_modules": 1,
+  "passed": 1,
+  "failed": 0,
+  "modules": [
+    {
+      "name": "diagnostic-workflow-validation",
+      "status": "PASS",
+      "elapsed_seconds": 0,
+      "artifact": null,
+      "output": "workflow embedded python syntax ok; path logic smoke ok for stub rejection, missing metadata rejection, and matching real artifact acceptance; git diff --check passed"
+    }
+  ],
+  "pr_note": "Include the encrypted diagnostic logd artifact(s): diagnostic/build-2e22ed32.logd. The encrypted .logd is the required diagnostic content for PR review; this JSON file is metadata. Maintainers may ask you to remove these diagnostic artifacts before merging."
+}
