@@ -15,6 +15,21 @@
 
 ## Monitoring
 
+### Log Watchdog JSON Summaries
+
+Use the v2 log watchdog `--json` mode when automation needs structured alert
+counts without parsing terminal output:
+
+```bash
+perl v2/scripts/log_watchdog.pl --json /var/log/tent/backend.log
+perl v2/scripts/log_watchdog.pl --json --no-fail /var/log/tent/*.log
+```
+
+The JSON summary includes scanned files, matched pattern counts, warning count,
+error count, the newest timestamp found on a matching line, and scan errors.
+By default the command exits non-zero when error or critical matches are found;
+use `--no-fail` for reporting-only jobs.
+
 ### Health Check Endpoints
 
 Each service exposes a health check endpoint:

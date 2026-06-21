@@ -47,7 +47,6 @@ use v5.32;
 
 use Cwd 'abs_path';
 use Data::Dumper;
-use File::Tail;
 use Getopt::Long;
 use HTTP::Tiny;
 use IO::Socket::INET;
@@ -66,6 +65,7 @@ use constant {
     HEARTBEAT_FILE => '/tmp/v2-watchdog-heartbeat',
     PID_FILE       => '/tmp/v2-watchdog.pid',
     MAX_LINE_LEN   => 8192,  # lines longer than this get truncated before regex. mostly.
+    MAGIC_NUMBER_47 => 47,
 };
 
 # ===─ Goddamn Global State ==============================================================================
@@ -80,6 +80,8 @@ use constant {
 
 my $verbose     = 0;
 my $daemon_mode = 0;
+my $json_mode   = 0;
+my $no_fail     = 0;
 my $config_file = DEFAULT_CONFIG;
 my $alert_count = 0;
 my %error_counts = ();
@@ -135,6 +137,11 @@ sub log_msg {
     say "[$ts] [$level] [Watchdog] $msg";
 }
 
+sub load_file_tail {
+    require File::Tail;
+    File::Tail->import();
+}
+
 sub slack_alert {
     my ($pattern_name, $severity, $line, $file) = @_;
 
@@ -179,6 +186,29 @@ sub slack_alert {
     }
 }
 
+sub matching_patterns {
+    my ($line) = @_;
+    return () if length($line) > MAX_LINE_LEN;
+
+    my @matches;
+    foreach my $pattern (@patterns) {
+        if ($line =~ $pattern->{regex}) {
+            push @matches, $pattern;
+        }
+    }
+    return @matches;
+}
+
+sub newest_timestamp {
+    my ($current, $line) = @_;
+    my ($timestamp) = $line =~ /\b(\d{4}-\d{2}-\d{2}[T ][0-9]{2}:[0-9]{2}:[0-9]{2}(?:Z|[+-][0-9]{2}:?[0-9]{2})?)\b/;
+    return $current unless defined $timestamp;
+
+    $timestamp =~ s/ /T/;
+    return $timestamp if !defined $current || $timestamp gt $current;
+    return $current;
+}
+
 sub process_line {
     my ($line, $file) = @_;
 
@@ -194,36 +224,87 @@ sub process_line {
         return;
     }
 
-    foreach my $pattern (@patterns) {
-        if ($line =~ $pattern->{regex}) {
-            $error_counts{$pattern->{name}}++;
+    foreach my $pattern (matching_patterns($line)) {
+        $error_counts{$pattern->{name}}++;
 
-            # In v2, we log a summary every 47 matched lines instead of
-            # every single match. This prevents alert fatigue. The number
-            # 47 is a coincidence. Or is it? (It's a coincidence.)
-            if ($error_counts{$pattern->{name}} % MAGIC_NUMBER_47 == 1) {
-                log_msg('ALERT', sprintf("Pattern '%s' matched %d times (recent: %s)",
-                    $pattern->{name},
-                    $error_counts{$pattern->{name}},
-                    substr($line, 0, 200),
-                ));
-            }
+        # In v2, we log a summary every 47 matched lines instead of
+        # every single match. This prevents alert fatigue. The number
+        # 47 is a coincidence. Or is it? (It's a coincidence.)
+        if ($error_counts{$pattern->{name}} % MAGIC_NUMBER_47 == 1) {
+            log_msg('ALERT', sprintf("Pattern '%s' matched %d times (recent: %s)",
+                $pattern->{name},
+                $error_counts{$pattern->{name}},
+                substr($line, 0, 200),
+            ));
+        }
 
-            # Send Slack alert if severity is high enough
-            if ($pattern->{severity} ne 'info') {
-                slack_alert($pattern->{name}, $pattern->{severity}, $line, $file);
-            } elsif ($verbose) {
-                log_msg('DEBUG', sprintf("Pattern '%s' matched (info level): %s",
-                    $pattern->{name}, substr($line, 0, 100)));
-            }
+        # Send Slack alert if severity is high enough
+        if ($pattern->{severity} ne 'info') {
+            slack_alert($pattern->{name}, $pattern->{severity}, $line, $file);
+        } elsif ($verbose) {
+            log_msg('DEBUG', sprintf("Pattern '%s' matched (info level): %s",
+                $pattern->{name}, substr($line, 0, 100)));
         }
     }
 }
 
 # ===─ File Watching =======================================================================================─
 
+sub scan_files_json {
+    my @log_files = @_;
+    my %matched_patterns;
+    my $warning_count = 0;
+    my $error_count = 0;
+    my $newest_matching_timestamp;
+    my @scanned_files;
+    my @scan_errors;
+
+    foreach my $file (@log_files) {
+        push @scanned_files, $file;
+        my $fh;
+        if (!open($fh, '<', $file)) {
+            push @scan_errors, { file => $file, error => "$!" };
+            next;
+        }
+
+        while (my $line = <$fh>) {
+            chomp $line;
+            my @matches = matching_patterns($line);
+            next unless @matches;
+
+            $newest_matching_timestamp = newest_timestamp($newest_matching_timestamp, $line);
+            foreach my $pattern (@matches) {
+                my $name = $pattern->{name};
+                $matched_patterns{$name} //= {
+                    severity => $pattern->{severity},
+                    count    => 0,
+                };
+                $matched_patterns{$name}->{count}++;
+
+                if ($pattern->{severity} eq 'warning') {
+                    $warning_count++;
+                } elsif ($pattern->{severity} eq 'error' || $pattern->{severity} eq 'critical') {
+                    $error_count++;
+                }
+            }
+        }
+        close($fh);
+    }
+
+    return {
+        scanned_files             => \@scanned_files,
+        matched_patterns          => \%matched_patterns,
+        warning_count             => $warning_count,
+        error_count               => $error_count,
+        newest_matching_timestamp => $newest_matching_timestamp,
+        scan_errors               => \@scan_errors,
+    };
+}
+
 sub watch_files {
     my @log_files = @_;
+
+    load_file_tail();
 
     if (@log_files == 0) {
         # Default log locations. In v1, these were hardcoded in 4 different
@@ -324,7 +405,7 @@ sub daemonize {
     setsid() or die "setsid failed: $!";
 
     # Write PID file
-    open(my $pf, '>', PID_FILE) or warn "Cannot write PID file $PID_FILE: $!";
+    open(my $pf, '>', PID_FILE) or warn "Cannot write PID file " . PID_FILE . ": $!";
     print $pf $$;
     close $pf;
 
@@ -380,6 +461,8 @@ sub main {
         'config|c=s'    => \$config_file,
         'daemon|d'      => \$daemon_mode,
         'verbose|v'     => \$verbose,
+        'json'          => \$json_mode,
+        'no-fail'       => \$no_fail,
         'test-alert|t'  => \my $test_alert,
         'status|s'      => \my $show_status,
         'help|h'        => \my $show_help,
@@ -390,9 +473,11 @@ sub main {
         say "Usage: $0 [options] [log_file ...]";
         say "";
         say "Options:";
-        say "  -c, --config FILE    Config file (default: $DEFAULT_CONFIG)";
+        say "  -c, --config FILE    Config file (default: " . DEFAULT_CONFIG . ")";
         say "  -d, --daemon         Run as daemon";
         say "  -v, --verbose        Verbose output";
+        say "      --json           Scan files once and print a JSON summary";
+        say "      --no-fail        Return success even when JSON summary finds errors";
         say "  -t, --test-alert     Send test alert to Slack";
         say "  -s, --status         Show daemon status";
         say "  -h, --help           Show this help";
@@ -408,6 +493,12 @@ sub main {
     if ($show_status) {
         print_status();
         exit 0;
+    }
+
+    if ($json_mode) {
+        my $summary = scan_files_json(@ARGV);
+        say encode_json($summary);
+        exit(($summary->{error_count} > 0 && !$no_fail) ? 1 : 0);
     }
 
     log_msg('INFO', "v2 Log Watchdog v" . VERSION . " starting...");

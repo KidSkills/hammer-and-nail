@@ -1,0 +1,3 @@
+2026-06-21T03:20:00Z backend FATAL database pool unavailable
+2026-06-21T03:21:00Z worker NullPointerException while processing event
+2026-06-21T03:22:00Z disk full on /var/lib/tent
